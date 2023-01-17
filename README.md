@@ -18,6 +18,7 @@ Wrote in Vala, Ruby, C, and Python
 `cd sample && bash build_vala.sh`
 
 # Usage (The ruby wrapper)
+```
 ./gwebengine.rb - QtWebEngine GObject bindings loader shim
 
 SYNOPSIS:
@@ -32,6 +33,7 @@ EXAMPLES:
 
 OPTIONS:
   -c PLUGIN_PATH     the plugin to load non ruby programs
+```
 
 # Usage (The Python program)
 `./bin/gwebengine.py PATH_TO_LIB PATH_TO_PLUGIN [DATA]`
