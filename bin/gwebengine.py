@@ -70,37 +70,45 @@ class Example(QMainWindow):
         self.webEngineView.page().fullScreenRequested.connect(self.fullScreenRequested)
         self.webEngineView.page().printRequested.connect(lambda :self.webview.print())
         self.webEngineView.page().windowCloseRequested.connect(lambda :self.webview.close())
+        self.webEngineView.page().iconUrlChanged.connect(lambda :self.webview.set_favicon(self.webEngineView.page().iconUrl().url()))
         #self.webEngineView.page().createWindow.connect(lambda :self.webview.create())
         self.setGeometry(0, 0, 1, 1)
         self.setWindowTitle('NoSeeMe')
 
     def init_webview(self, webview):
         self.webview=webview
+
         QtWidgets.qApp.focusChanged.connect(self.on_focus)
+
         self.webEngineView.settings().setAttribute(QWebEngineSettings.JavascriptEnabled, True)
         self.webEngineView.settings().setAttribute(QWebEngineSettings.WebGLEnabled, True)
         self.webEngineView.settings().setAttribute(QWebEngineSettings.FullScreenSupportEnabled, True)
         self.webEngineView.settings().setAttribute(QWebEngineSettings.PluginsEnabled, True)
 
-        webview.get_settings().set_javascript_enabled(True)
-        webview.get_settings().set_fullscreen_enabled(True)
-        webview.get_settings().set_webgl_enabled(True)
-        webview.get_settings().set_plugins_enabled(True)
+        webview.get_settings().set_enable_javascript(True)
+        webview.get_settings().set_enable_fullscreen(True)
+        webview.get_settings().set_enable_webgl(True)
+        webview.get_settings().set_enable_plugins(True)
 
         ## connect settings properties after init
         # ...
 
-        webview.get_settings().connect("notify::fullscreen-enabled", lambda wv,prop: self.webEngineView.settings().setAttribute(QWebEngineSettings.FullScreenSupportEnabled, webview.get_settings().get_fullscreen_enabled()))
-        webview.get_settings().connect("notify::webgl-enabled", lambda wv,prop: self.webEngineView.settings().setAttribute(QWebEngineSettings.FullScreenSupportEnabled, webview.get_settings().get_webgl_enabled()))
-        webview.get_settings().connect("notify::javascript-enabled", lambda wv,prop: self.webEngineView.settings().setAttribute(QWebEngineSettings.FullScreenSupportEnabled, webview.get_settings().get_javascript_enabled()))
-        webview.get_settings().connect("notify::plugins-enabled", lambda wv,prop: self.webEngineView.settings().setAttribute(QWebEngineSettings.PluginsEnabled, webview.get_settings().get_plugins_enabled()))
+        webview.get_settings().connect("notify::enable-fullscreen", lambda wv,prop: self.webEngineView.settings().setAttribute(QWebEngineSettings.FullScreenSupportEnabled, webview.get_settings().get_enable_fullscreen()))
+        webview.get_settings().connect("notify::enable-webgl", lambda wv,prop: self.webEngineView.settings().setAttribute(QWebEngineSettings.FullScreenSupportEnabled, webview.get_settings().get_enable_webgl()))
+        webview.get_settings().connect("notify::enable-javascript", lambda wv,prop: self.webEngineView.settings().setAttribute(QWebEngineSettings.FullScreenSupportEnabled, webview.get_settings().get_enable_javascript()))
+        webview.get_settings().connect("notify::enable-plugins", lambda wv,prop: self.webEngineView.settings().setAttribute(QWebEngineSettings.PluginsEnabled, webview.get_settings().get_enable_plugins()))
 
+        # listen to methods called on the GWebEngine::WebView
         webview.connect("signal-go-back", self.back)
         webview.connect("signal-go-forward", self.forward)
         webview.connect("signal-reload", self.reload)
+        webview.connect("signal-stop", self.stop)
         webview.connect("signal-execute", self.execute)
         webview.connect("signal-load", self.load)
+        webview.connect("signal-load-html", lambda wv, code: self.webEngineView.load_html(code))
         webview.connect("signal-find", self.onFind)
+        webview.connect("signal-get-zoom-level", lambda wv: self.webEngineView.page().zoomFactor())
+        webview.connect("signal-set-zoom-level", lambda wv, l: self.webEngineView.page().setZoomFactor(l))
 
         self.ever_shown = False
 
@@ -136,14 +144,17 @@ class Example(QMainWindow):
         if url.isValid():
             self.webEngineView.load(url)
 
-    def back(self):
-        self.webEngineView.page().triggerAction(QWebEnginePage.Back)
+    def back(self, wv):
+        self.webEngineView.back()
 
-    def forward(self):
-        self.webEngineView.page().triggerAction(QWebEnginePage.Forward)
+    def forward(self, wv):
+        self.webEngineView.forward()
 
     def reload(self, wv):
         self.webEngineView.page().triggerAction(QWebEnginePage.Reload)
+
+    def stop(self):
+        ...
 
     def execute(self,wv,code):
         result = GWebEngine.JSResult()

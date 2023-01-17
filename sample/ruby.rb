@@ -29,14 +29,16 @@ ldr.signal_connect "ready" do
   w.add q
   w.show_all
 
+  e.hide if ARGV.index "--no-location-bar"
+
   w.signal_connect "delete-event" do
     ldr.main_quit()
   end
 
-  engine.settings.fullscreen_enabled = true
-  engine.settings.javascript_enabled = true
-  engine.settings.webgl_enabled      = true
-  engine.settings.plugins_enabled    = true
+  engine.settings.enable_fullscreen = true
+  engine.settings.enable_javascript = true
+  engine.settings.enable_webgl      = true
+  engine.settings.enable_plugins    = true
 
   engine.signal_connect "notify::title" do
     w.title = engine.title
@@ -53,32 +55,48 @@ ldr.signal_connect "ready" do
   end
 
   engine.signal_connect("on-key-press") do |eng, event|
-    ctrl = (event.modifiers & Gdk::ModifierType::CONTROL_MASK.to_i) rescue nil
-    if ctrl && (event.virtual_key == Gdk::Keyval::KEY_l)
-      e.grab_focus
-      engine.can_focus = false
-      next true
-    end
-    
-    if ctrl && (event.virtual_key == Gdk::Keyval::KEY_f)
-      if !@find
-        @find = Gtk::Window.new
-        @find.title = "find..."
-        @find.add q=Gtk::Entry.new
-        q.signal_connect "activate" do
-          p engine.find(q.text);
-        end
-        
-        @find.signal_connect "delete-event" do
-          @find = nil
-        end
+    ctrl_shift = (0 != (event.modifiers & Gdk::ModifierType::SHIFT_MASK.to_i)) rescue nil
+    ctrl       = (0 != (event.modifiers & Gdk::ModifierType::CONTROL_MASK.to_i)) rescue nil
+
+    if (!ctrl_shift) && (ctrl)
+      if (event.virtual_key == Gdk::Keyval::KEY_l)
+        e.grab_focus
+        engine.can_focus = false
+        next true
       end
-      
-      @find.children[0].text=''
-      @find.show_all
-      @find.present
-      
-      next true
+
+      if (event.virtual_key == Gdk::Keyval::KEY_f)
+        if !@find
+          @find = Gtk::Window.new
+          @find.title = "find..."
+          @find.add q=Gtk::Entry.new
+
+          q.signal_connect "activate" do
+            engine.find(q.text);
+          end
+
+          @find.signal_connect "delete-event" do
+            @find = nil
+          end
+        end
+
+        @find.children[0].text=''
+        @find.show_all
+        @find.present
+
+        next true
+      end
+
+      if event.virtual_key == Gdk::Keyval::KEY_Tab
+        engine.go_forward
+        next true
+      end
+
+    elsif ctrl
+      if event.virtual_key == Gdk::Keyval::KEY_ISO_Left_Tab.to_i
+        engine.go_back
+        next true
+      end
     end
 
     false
@@ -86,7 +104,6 @@ ldr.signal_connect "ready" do
 
   engine.signal_connect "ready-to-show" do
     engine.load_uri(ARGV[0]||"https://duckduckgo.com")
-    engine.grab_focus
 
     result = engine.run_javascript "a={foo: 5};a"
 
@@ -97,6 +114,10 @@ ldr.signal_connect "ready" do
 
   engine.signal_connect("notify::url") do
     e.text = engine.url
+  end
+
+  engine.signal_connect("notify::favicon") do
+    w.icon = engine.icon
   end
 end
 

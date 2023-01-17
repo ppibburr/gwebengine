@@ -9,19 +9,35 @@ public class Plugin : GWebEngine.Main, GWebEngine.Plugin {
   }
 
   public bool key_event(GWebEngine.KeyEvent e) {
-    var ctrl = (e.modifiers & Gdk.ModifierType.CONTROL_MASK);
-    print("Key: "+e.key.to_string()+":"+Gdk.Key.l.to_string()+":"+e.virtual_key.to_string()+"\n");
+    var ctrl       = (e.modifiers & Gdk.ModifierType.CONTROL_MASK);
+    var ctrl_shift = (e.modifiers & Gdk.ModifierType.SHIFT_MASK);
+
+    if ((ctrl !=0) && (ctrl_shift != 0)) {
+      // Ctrl+Shift+Tab -> go back
+      if (e.virtual_key == Gdk.Key.ISO_Left_Tab) {
+        engine.go_back();
+        return true;
+      }
+    }
 
     if (ctrl != 0) {
-      if ((e.virtual_key) == Gdk.Key.l) {
+      // Ctrl+l -> focus location
+      if (e.virtual_key == Gdk.Key.l) {
         print("Ctrl-l\n");
         show_location();
 
         return true;
       }
-      if ((e.virtual_key) == Gdk.Key.f) {
+
+      // Ctrl+f -> find
+      if (e.virtual_key == Gdk.Key.f) {
         show_find();
         return true;
+      }
+
+      // Ctrl+Tab -> go forward
+      if (e.virtual_key == Gdk.Key.Tab) {
+        engine.go_forward();
       }
     }
 
@@ -93,20 +109,15 @@ public class Plugin : GWebEngine.Main, GWebEngine.Plugin {
 
     print("load: "+url+"\n");
 
-    engine.settings.fullscreen_enabled = true;
-    engine.settings.javascript_enabled = true;
-    engine.settings.webgl_enabled      = true;
-    engine.settings.plugins_enabled    = true;
+    engine.settings.enable_fullscreen = true;
+    engine.settings.enable_javascript = true;
+    engine.settings.enable_webgl      = true;
+    engine.settings.enable_plugins    = true;
 
     engine.on_key_press.connect(key_event);
 
     engine.ready_to_show.connect(() => {
       engine.load_uri(url);
-
-      engine.notify["url"].connect(()=>{
-        bool found;
-        engine.find("ee", out found);
-      });
 
       var res = engine.run_javascript("a={foo: 5};a");
         res.ready.connect((r, json) => {
@@ -126,6 +137,10 @@ public class Plugin : GWebEngine.Main, GWebEngine.Plugin {
 
     engine.notify["title"].connect(()=>{
       w.title = engine.title;
+    });
+
+    engine.notify["favicon"].connect(()=>{
+      w.icon = engine.icon();
     });
   }
 }

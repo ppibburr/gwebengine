@@ -129,10 +129,13 @@ namespace GWebEngine {
   }
 
   public class WebSettings : Object {
-    public bool javascript_enabled {get;set;}
-    public bool fullscreen_enabled {get;set;}
-    public bool plugins_enabled {get;set;}
-    public bool webgl_enabled {get;set;}
+    public bool enable_javascript {get;set;}
+    public bool enable_fullscreen {get;set;}
+    public bool enable_plugins {get;set;}
+    public bool enable_webgl {get;set;}
+    public bool auto_load_images {get;set;}
+    public bool javascript_can_access_clipboard {get;set;}
+    public bool javascript_can_open_windows_automatically {get; set;}
   }
 
   public class WebView : Gtk.Socket {
@@ -140,12 +143,25 @@ namespace GWebEngine {
     public bool    can_go_back {get; set;}
     public bool    can_go_forward {get; set;}
     public string? url {get; set;}
-    public double  zoom_level {get; set;}
-    public double  load_progess {get; set;}
-    public bool    is_loading {get; set;}
-    public string  favicon {get; set;}
-    public WebSettings? settings { get; construct set;}
+    public double  zoom_level {
+	  get {
+		return signal_get_zoom_level();
+	  }
+	  set{
+		signal_set_zoom_level(value);
+	  }
+	}
 
+    public double  load_progess {get; set;}
+    public bool    is_loading {
+	  get {
+		return signal_get_is_loading();
+	  }
+	}
+
+    public string?  favicon {get;set;}
+
+    public WebSettings? settings { get; construct set;}
     public int     winid {construct set; get;}
 
     construct {
@@ -178,7 +194,6 @@ namespace GWebEngine {
 
     public void stop() {
 		signal_stop();
-		
 	}
 
 	public void load_uri(string url) {
@@ -190,7 +205,7 @@ namespace GWebEngine {
 	}
 
     public void load_html() {
-		
+		signal_load_html(url);
 	}
 	
 	
@@ -213,11 +228,11 @@ namespace GWebEngine {
 	}
 
 	public void find(string text, out bool foo) {
-	  if (signal_find(text)) {
-	    foo=true;
-	  }
-	  
-	  foo=false;
+	  foo = signal_find(text);
+	}
+
+	public Gdk.Pixbuf? icon() {
+	  return new Gdk.Pixbuf.from_stream(File.new_for_uri(this.favicon).read());
 	}
 
 	// Outgoing events
@@ -226,10 +241,14 @@ namespace GWebEngine {
 	public signal void signal_reload();
 	public signal void signal_stop();	
 	public signal void signal_load(string url);
+	public signal void signal_load_html(string code);
 	public signal JSResult signal_execute(string code);
 	public signal void signal_fullscreen();
 	public signal void signal_unfullscreen();
 	public signal bool signal_find(string text);
+	public signal bool signal_get_is_loading();
+	public signal double signal_get_zoom_level();
+	public signal void   signal_set_zoom_level(double zoom);
 
 	// Incoming events
 	public signal void load_changed();
@@ -238,7 +257,7 @@ namespace GWebEngine {
 	public signal bool enter_fullscreen();
 	public signal bool leave_fullscreen();
 	public signal void close();
-	// not implemented yet
+	// // not implemented yet
 	public signal void create();
 	public signal void authenticate();		
 	public signal void context_menu();
