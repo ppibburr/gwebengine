@@ -32,8 +32,12 @@ public class Plugin : GWebEngine.Main, GWebEngine.Plugin {
     var l = new Gtk.Dialog();
     var e = new Gtk.Entry();
 
-    e.text = engine.url
-    ;
+    e.text = engine.url;
+    
+    e.activate.connect(()=>{
+	  engine.load_uri(e.text);
+	});
+    
     l.get_content_area().add(e);
     l.show_all();
 
@@ -47,7 +51,8 @@ public class Plugin : GWebEngine.Main, GWebEngine.Plugin {
     var b = new Gtk.Button.with_label("Find");
 
     e.activate.connect(()=>{
-      engine.find(e.text);
+	  bool found;
+      engine.find(e.text, out found);
     });
 
     h.pack_start(e, true,true,0);
@@ -95,27 +100,28 @@ public class Plugin : GWebEngine.Main, GWebEngine.Plugin {
 
     engine.on_key_press.connect(key_event);
 
-    engine.ready.connect(() => {
-      engine.load(url);
+    engine.ready_to_show.connect(() => {
+      engine.load_uri(url);
 
       engine.notify["url"].connect(()=>{
-        print(engine.find("ee").to_string());
+        bool found;
+        engine.find("ee", out found);
       });
 
-      var res = engine.execute("a={foo: 5};a");
+      var res = engine.run_javascript("a={foo: 5};a");
         res.ready.connect((r, json) => {
         print(json+"\n");
       });
     });
 
-    engine.signal_fullscreen_request.connect((e,on)=>{
-      if (on) {
-        w.hide();
-      } else {
-        w.show_all();
-      }
+    engine.leave_fullscreen.connect(()=>{
+      w.show();
+      return false;
+    });
 
-      return true;
+    engine.enter_fullscreen.connect(()=>{
+      w.hide();
+      return false;
     });
 
     engine.notify["title"].connect(()=>{

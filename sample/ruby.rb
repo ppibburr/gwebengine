@@ -22,7 +22,7 @@ ldr.signal_connect "ready" do
   q.pack_start engine = ldr.make_webview(), expand: true, fill: true, padding: 0
 
   e.signal_connect "activate" do
-    engine.load e.text
+    engine.load_uri e.text
   end
 
   w.resize 1300,900
@@ -42,9 +42,14 @@ ldr.signal_connect "ready" do
     w.title = engine.title
   end
 
-  engine.signal_connect "signal-fullscreen-request" do |e,on|
-    on ? w.hide : w.show_all
-    true
+  engine.signal_connect "enter-fullscreen" do
+    w.hide
+    false
+  end
+
+  engine.signal_connect "leave-fullscreen" do
+    w.show
+    false
   end
 
   engine.signal_connect("on-key-press") do |eng, event|
@@ -52,16 +57,38 @@ ldr.signal_connect "ready" do
     if ctrl && (event.virtual_key == Gdk::Keyval::KEY_l)
       e.grab_focus
       engine.can_focus = false
+      next true
+    end
+    
+    if ctrl && (event.virtual_key == Gdk::Keyval::KEY_f)
+      if !@find
+        @find = Gtk::Window.new
+        @find.title = "find..."
+        @find.add q=Gtk::Entry.new
+        q.signal_connect "activate" do
+          p engine.find(q.text);
+        end
+        
+        @find.signal_connect "delete-event" do
+          @find = nil
+        end
+      end
+      
+      @find.children[0].text=''
+      @find.show_all
+      @find.present
+      
+      next true
     end
 
     false
   end
 
-  engine.signal_connect "ready" do
-    engine.load(ARGV[0]||"https://duckduckgo.com")
+  engine.signal_connect "ready-to-show" do
+    engine.load_uri(ARGV[0]||"https://duckduckgo.com")
     engine.grab_focus
 
-    result = engine.execute "a={foo: 5};a"
+    result = engine.run_javascript "a={foo: 5};a"
 
     result.signal_connect "ready" do |r, json|
       puts json

@@ -63,12 +63,14 @@ class Example(QMainWindow):
         self.webEngineView = QWebEngineView(self)
         self.setCentralWidget(self.webEngineView)
 
-        self.webEngineView.page().urlChanged.connect(self.onLoadFinished)
-
+        self.webEngineView.page().loadStarted.connect(self.loadStarted)
+        self.webEngineView.page().loadFinished.connect(self.loadFinished)
         self.webEngineView.page().titleChanged.connect(self.titleChanged)
         self.webEngineView.page().urlChanged.connect(self.urlChanged)
         self.webEngineView.page().fullScreenRequested.connect(self.fullScreenRequested)
-
+        self.webEngineView.page().printRequested.connect(lambda :self.webview.print())
+        self.webEngineView.page().windowCloseRequested.connect(lambda :self.webview.close())
+        #self.webEngineView.page().createWindow.connect(lambda :self.webview.create())
         self.setGeometry(0, 0, 1, 1)
         self.setWindowTitle('NoSeeMe')
 
@@ -110,22 +112,22 @@ class Example(QMainWindow):
         if not self.ever_shown:
             self.ever_shown=True
             self.webview.take()
-            self.webview.emit("ready")
+            self.webview.emit("ready-to-show")
 
     def keyPressEvent(self, event):
         e = GWebEngine.KeyEvent(key=event.key(),text=event.text(),modifiers=event.nativeModifiers(),virtual_key=event.nativeVirtualKey(),scan_code=event.nativeScanCode())
         self.webview.key_press(e)
 
-    def onLoadFinished(self):
-        if self.webEngineView.history().canGoBack():
-            self.webview.set_can_go_back(True)
-        else:
-            self.webview.set_can_go_back(False)
+    def loadFinished(self):
+      self.onLoadChanged()
 
-        if self.webEngineView.history().canGoForward():
-            self.webview.set_can_go_forward(True)
-        else:
-            self.webview.set_can_go_forward(False)
+    def loadStarted(self):
+      self.onLoadChanged()
+
+    def onLoadChanged(self):
+      self.webview.set_can_go_back(self.webEngineView.history().canGoBack());
+      self.webview.set_can_go_forward(self.webEngineView.history().canGoForward());      
+      self.webview.emit("load-changed");
 
     def load(self, wv, url):
 
@@ -159,12 +161,12 @@ class Example(QMainWindow):
 
     def fullScreenRequested(self, request):
         if request.toggleOn():
-            if self.webview.fullscreen_request(request.toggleOn()):
+            if not self.webview.emit("enter-fullscreen"):
                 request.accept();
                 self.fullscreen()
 
         else:
-            if self.webview.fullscreen_request(request.toggleOn()):
+            if not self.webview.emit("leave-fullscreen"):
                 request.accept();
                 self.unfullscreen()
 
@@ -232,7 +234,7 @@ def main():
     w.resize(width= 1,height= 1)
     #############################################
 
-    GLib.timeout_add(10,lambda :runner(w))
+    GLib.timeout_add(100,lambda :runner(w))
 
     Gtk.main()
 

@@ -140,12 +140,16 @@ namespace GWebEngine {
     public bool    can_go_back {get; set;}
     public bool    can_go_forward {get; set;}
     public string? url {get; set;}
-    public int     winid {construct set; get;}
+    public double  zoom_level {get; set;}
+    public double  load_progess {get; set;}
+    public bool    is_loading {get; set;}
+    public string  favicon {get; set;}
     public WebSettings? settings { get; construct set;}
+
+    public int     winid {construct set; get;}
 
     construct {
 	  this.settings  = new WebSettings();
-
 	}
 
     public WebView(int id, WebSettings _settings=new WebSettings()) {
@@ -160,11 +164,11 @@ namespace GWebEngine {
 		this.can_focus = true;
 	}
 
-	public void back() {
+	public void go_back() {
 		signal_go_back();
 	}
 
-	public void forward() {
+	public void go_forward() {
 		signal_go_forward();
 	}
 
@@ -172,26 +176,34 @@ namespace GWebEngine {
 		signal_reload();
 	}
 
-	public JSResult execute(string code) {
-		return signal_execute(code);
+    public void stop() {
+		signal_stop();
+		
 	}
 
-	public void load(string url) {
+	public void load_uri(string url) {
 		signal_load(url);
 	}
 
-	public bool fullscreen_request(bool toggle_on) {
-		return signal_fullscreen_request(toggle_on);
+	public JSResult run_javascript(string code) {
+		return signal_execute(code);
 	}
 
+    public void load_html() {
+		
+	}
+	
+	
+    //
+
     public void fullscreen() {
-		if (fullscreen_request(true)) {
+		if (!enter_fullscreen()) {
 		  signal_fullscreen();
 	    }
 	}
 
     public void unfullscreen() {
-		if (fullscreen_request(false)) {
+		if (!leave_fullscreen()) {
 		  signal_unfullscreen();
 	    }
 	}
@@ -200,24 +212,44 @@ namespace GWebEngine {
 	  on_key_press(e);
 	}
 
-	public bool find(string text) {
-	  return signal_find(text);
+	public void find(string text, out bool foo) {
+	  if (signal_find(text)) {
+	    foo=true;
+	  }
+	  
+	  foo=false;
 	}
 
 	// Outgoing events
 	public signal void signal_go_back();
 	public signal void signal_go_forward();
 	public signal void signal_reload();
+	public signal void signal_stop();	
 	public signal void signal_load(string url);
 	public signal JSResult signal_execute(string code);
-	public signal bool signal_fullscreen_request(bool toggle_on);
 	public signal void signal_fullscreen();
 	public signal void signal_unfullscreen();
 	public signal bool signal_find(string text);
 
 	// Incoming events
+	public signal void load_changed();
+	public signal void ready_to_show();
+	public signal void print();	
+	public signal bool enter_fullscreen();
+	public signal bool leave_fullscreen();
+	public signal void close();
+	// not implemented yet
+	public signal void create();
+	public signal void authenticate();		
+	public signal void context_menu();
+	public signal void resource_load_started();
+	public signal void permission_request();
+    public signal void run_color_chooser();	  
+    public signal void run_file_chooser();	 
+	public signal void script_dialog();
+	
+	// custom
 	public signal bool on_key_press(KeyEvent e);
-	public signal void ready();
   }
 
   public class JSResult : Object {
