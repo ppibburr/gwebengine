@@ -25,6 +25,8 @@ ldr.signal_connect "ready" do
     engine.load_uri e.text
   end
 
+  e.can_focus = true
+
   w.resize 1300,900
   w.add q
   w.show_all
@@ -61,7 +63,7 @@ ldr.signal_connect "ready" do
     if (!ctrl_shift) && (ctrl)
       if (event.virtual_key == Gdk::Keyval::KEY_l)
         e.grab_focus
-        engine.can_focus = false
+
         next true
       end
 

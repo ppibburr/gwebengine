@@ -50,10 +50,8 @@ class Example(QMainWindow):
 
 
     def on_focus(self, old,now):
-        # Do something with the event here
-        print("eeeeet\n")
         if self.ever_shown and now:
-            print(now)
+            ...
             #self.webview.grab_focus()
         else:
             if self.ever_shown:
@@ -215,13 +213,10 @@ class Example(QMainWindow):
 import time
 
 def start(plugin):
-    plugin.d.close();
-
     plugin.app = QApplication(sys.argv)
 
     plugin.init()
 
-    #plugin.app.exec_()
     return False
 
 import os
@@ -245,7 +240,7 @@ def main():
     w.resize(width= 1,height= 1)
     #############################################
 
-    GLib.timeout_add(100,lambda :runner(w))
+    w.connect("draw",lambda win,e:runner(w))
 
     Gtk.main()
 
@@ -253,9 +248,8 @@ def main():
 
 def runner(w):
     w.close()
-    plugin = GWebEngine.load_plugin(sys.argv[2],sys.argv[3],[])
-    plugin.d = w
 
+    plugin = GWebEngine.load_plugin(sys.argv[2],sys.argv[3],[])
     plugin.connect("signal-make-webview", create_gwebengine)
     plugin.connect("signal-main-quit",  lambda ldr: main_quit(ldr))
     plugin.connect("signal-main", start)

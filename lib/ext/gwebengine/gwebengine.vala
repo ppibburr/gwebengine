@@ -72,7 +72,7 @@ namespace GWebEngine {
 
 	  var ldr=plugin.activated(data);
 
-	  GLib.Timeout.add(300,()=>{
+	  GLib.Timeout.add(0,()=>{
 		ldr.signal_main();
 		return false;
 	  });
