@@ -8,7 +8,7 @@ namespace GWebEngine {
 
   public interface Plugin : Object {
 	  public abstract void registered (PluginLoader loader);
-	  public abstract Main activated(string? data);
+	  public abstract void activated(string? data);
 	  public abstract void deactivated ();
   }
 
@@ -62,7 +62,7 @@ namespace GWebEngine {
 	  }
   }
 
-  public Main? load_plugin(string path, string? data, string[] a={}) {
+  public Plugin? load_plugin(string path, string? data, string[] a={}) {
 	try {
 	  PluginLoader loader = new PluginLoader();
 	  Plugin plugin = loader.load(path);
@@ -70,14 +70,14 @@ namespace GWebEngine {
 	  plugin.ref();
 	  loader.ref();
 
-	  var ldr=plugin.activated(data);
+	  plugin.activated(data);
 
 	  GLib.Timeout.add(0,()=>{
-		ldr.signal_main();
+		//ldr.signal_main();
 		return false;
 	  });
 
-	  return ldr;
+	  return plugin;
 
 	} catch (PluginError e) {
 	  print("Error: %s\n", e.message);
@@ -87,35 +87,34 @@ namespace GWebEngine {
   }
 
   public class Main : Object {
-    public string? data {construct set; get;}
-
-	public WebView make_webview() {
-		return signal_make_webview();
+	private bool _qt; // true if QApplication initialized
+	public bool qt {  // true if QApplication initialized
+	  get {
+	    return _qt;
+  	  }
 	}
 
-	public void main_quit() {
-		signal_main_quit();
+	public static Main? _default = null;       // Default instance of the relay
+    public static unowned Main get_default() { // Default instance of the relay
+		if (_default != null) {
+		  return _default;
+	    }
+
+	    _default = new Main();
+	    _default.ref();
+	    return _default;
 	}
 
-	public void iterate() {
-		Gtk.main_iteration_do(false);
+	public void make_webview(WebView view) {  // Signals python to make a QWebEngineView
+		signal_make_webview(view);
 	}
 
-	// @private
-	// invokes the `ready` signal
-	public void init() {
-      ready();
+    public signal void signal_make_webview(WebView view); // "signal-" prefix signals are listened by python
+    public signal void qt_app() {                         // emitted when QApplication is started
+	  this._qt = true;
 	}
-
-
-    public signal WebView signal_make_webview();
-    public signal void signal_main_quit();
-    public signal void signal_main();
-
-	//
-	public signal void ready();
   }
-
+  
   public class Event : Object {
 
   }
@@ -166,17 +165,26 @@ namespace GWebEngine {
 
     construct {
 	  this.settings  = new WebSettings();
+
+	  if (Main.get_default().qt) {
+		Main._default.make_webview(this);
+
+	  } else {
+
+		Main.get_default().qt_app.connect(()=>{
+		  Main._default.make_webview(this);
+		});
+	  }
 	}
 
-    public WebView(int id, WebSettings _settings=new WebSettings()) {
-		this.winid=id;
-		this.settings = _settings;
+    public WebView(WebSettings? _settings=new WebSettings()) {
+		this.settings = _settings ?? new WebSettings();
 	}
 
 	// private
 	// Embeds the PyQT::Window into a Gtk::Socket
-	public void take() {
-		add_id( this.winid);
+	public void take(int id) {
+		add_id(id);
 		this.can_focus = true;
 	}
 
@@ -207,7 +215,6 @@ namespace GWebEngine {
     public void load_html() {
 		signal_load_html(url);
 	}
-	
 	
     //
 
@@ -257,8 +264,9 @@ namespace GWebEngine {
 	public signal bool enter_fullscreen();
 	public signal bool leave_fullscreen();
 	public signal void close();
+	public signal void download_requested(Download item);
 	// // not implemented yet
-	public signal void create();
+	public signal WebView? create();
 	public signal void authenticate();		
 	public signal void context_menu();
 	public signal void resource_load_started();
@@ -273,5 +281,19 @@ namespace GWebEngine {
 
   public class JSResult : Object {
     public signal void ready(string json);
+  }
+
+  public class Download : Object {
+	public string destination {get; set;}
+	private bool _is_cancelled=false;
+	public bool is_cancelled {get {
+	  return _is_cancelled;
+	}}
+
+	public void cancel() {
+	  _is_cancelled = true;
+	}
+
+	public signal void decide_destination(string suggested_filename);
   }
 }

@@ -18,6 +18,5 @@ rescue
 end
 
 GWebEngine::Loader.new(GWebEngine,[]).load
-GWebEngineRuby::Loader.new(GWebEngineRuby,[]).load
 
 STDERR.puts "ruby loader loaded."

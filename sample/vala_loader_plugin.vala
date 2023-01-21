@@ -1,11 +1,73 @@
-public class Plugin : GWebEngine.Main, GWebEngine.Plugin {
+public class Plugin : Object, GWebEngine.Plugin {
+  private GWebEngine.WebView engine;
+  
+  public void deactivated () {
+    print ("Deactivate");
+  }
+  
   public void registered (GWebEngine.PluginLoader loader) {
     print ("Loaded\n");
   }
 
-  public GWebEngine.Main activated(string? data) {
-    ready.connect(main);
-    return this;
+  public void activated(string? data) {
+    var w      = new Gtk.Window();
+    engine     = new GWebEngine.WebView();
+
+    w.add(engine);
+    w.resize(1300,900);
+    w.show_all();
+    w.present();
+
+    w.delete_event.connect(() => {
+      Gtk.main_quit();
+      return false;
+    });
+
+    string[]? argv;
+    GLib.Shell.parse_argv(Environment.get_variable("GWEBENGINE_ARGV"), out argv);
+
+    var url = "https://duckduckgo.com";
+    if (argv[0]!=null) {
+	  url = argv[0];
+	}
+
+    print("load: "+url+"\n");
+
+    engine.settings.enable_fullscreen = true;
+    engine.settings.enable_javascript = true;
+    engine.settings.enable_webgl      = true;
+    engine.settings.enable_plugins    = true;
+
+    engine.on_key_press.connect(key_event);
+
+    engine.ready_to_show.connect(() => {
+      engine.load_uri(url);
+
+      var res = engine.run_javascript("a={foo: 5};a");
+        res.ready.connect((r, json) => {
+        print(json+"\n");
+      });
+    });
+
+    engine.leave_fullscreen.connect(()=>{
+      w.show();
+      return false;
+    });
+
+    engine.enter_fullscreen.connect(()=>{
+      w.hide();
+      return false;
+    });
+
+    engine.notify["title"].connect(()=>{
+      w.title = engine.title;
+    });
+
+    engine.notify["favicon"].connect(()=>{
+      w.icon = engine.icon();
+    });
+
+    Gtk.main();
   }
 
   public bool key_event(GWebEngine.KeyEvent e) {
@@ -78,70 +140,6 @@ public class Plugin : GWebEngine.Main, GWebEngine.Plugin {
     l.show_all();
 
     return false;
-  }
-
-  public void deactivated () {
-    print ("Deactivate");
-  }
-
-  private GWebEngine.WebView engine;
-
-  public void main() {
-    var w      = new Gtk.Window();
-    engine     = make_webview();
-
-    w.add(engine);
-    w.resize(1300,900);
-    w.show_all();
-
-    w.delete_event.connect(() => {
-      main_quit();
-      return false;
-    });
-
-    string[]? argv;
-    GLib.Shell.parse_argv(Environment.get_variable("GWEBENGINE_ARGV"), out argv);
-
-    var url = "https://duckduckgo.com";
-    if (argv[0]!=null) {
-	  url = argv[0];
-	}
-
-    print("load: "+url+"\n");
-
-    engine.settings.enable_fullscreen = true;
-    engine.settings.enable_javascript = true;
-    engine.settings.enable_webgl      = true;
-    engine.settings.enable_plugins    = true;
-
-    engine.on_key_press.connect(key_event);
-
-    engine.ready_to_show.connect(() => {
-      engine.load_uri(url);
-
-      var res = engine.run_javascript("a={foo: 5};a");
-        res.ready.connect((r, json) => {
-        print(json+"\n");
-      });
-    });
-
-    engine.leave_fullscreen.connect(()=>{
-      w.show();
-      return false;
-    });
-
-    engine.enter_fullscreen.connect(()=>{
-      w.hide();
-      return false;
-    });
-
-    engine.notify["title"].connect(()=>{
-      w.title = engine.title;
-    });
-
-    engine.notify["favicon"].connect(()=>{
-      w.icon = engine.icon();
-    });
   }
 }
 
