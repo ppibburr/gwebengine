@@ -109,9 +109,11 @@ namespace GWebEngine {
 		signal_make_webview(view);
 	}
 
+	public signal void signal_make_context(Context ctx);
     public signal void signal_make_webview(WebView view); // "signal-" prefix signals are listened by python
     public signal void qt_app() {                         // emitted when QApplication is started
 	  this._qt = true;
+	  Context.get_default_context();
 	}
   }
   
@@ -128,13 +130,13 @@ namespace GWebEngine {
   }
 
   public class WebSettings : Object {
-    public bool enable_javascript {get;set;}
-    public bool enable_fullscreen {get;set;}
-    public bool enable_plugins {get;set;}
-    public bool enable_webgl {get;set;}
-    public bool auto_load_images {get;set;}
-    public bool javascript_can_access_clipboard {get;set;}
-    public bool javascript_can_open_windows_automatically {get; set;}
+    public bool enable_javascript {get;set; default=true;}
+    public bool enable_fullscreen {get;set; default=true;}
+    public bool enable_plugins {get;set; default=true;}
+    public bool enable_webgl {get;set; default=true;}
+    public bool auto_load_images {get;set; default=true;}
+    public bool javascript_can_access_clipboard {get;set; default=true;}
+    public bool javascript_can_open_windows_automatically {get; set; default=false;}
   }
 
   public class WebView : Gtk.Socket {
@@ -167,12 +169,15 @@ namespace GWebEngine {
 	  this.settings  = new WebSettings();
 
 	  if (Main.get_default().qt) {
+		Context.get_default_context();
 		Main._default.make_webview(this);
-
 	  } else {
-
 		Main.get_default().qt_app.connect(()=>{
-		  Main._default.make_webview(this);
+		  Context.get_default_context();
+		  GLib.Idle.add(()=>{
+		    Main._default.make_webview(this);
+		   return false;
+		  });
 		});
 	  }
 	}
@@ -265,6 +270,7 @@ namespace GWebEngine {
 	public signal bool leave_fullscreen();
 	public signal void close();
 	public signal void download_requested(Download item);
+	public signal void mouse_target_changed(HitTestResult result);
 	// // not implemented yet
 	public signal WebView? create();
 	public signal void authenticate();		
@@ -295,5 +301,37 @@ namespace GWebEngine {
 	}
 
 	public signal void decide_destination(string suggested_filename);
+  }
+
+  public class Context : Object {
+	private static Context? _default;
+	public static Context? get_default_context() {
+		if (_default == null) {
+		  _default = new Context();
+		}
+
+		return _default;
+	}
+
+	public Context() {
+	  if (Main.get_default().qt) {
+	    Main.get_default().signal_make_context(this);
+	  } else {
+		Main.get_default().qt_app.connect(()=>{
+		  Main.get_default().signal_make_context(this);
+		});
+	  }
+	}
+
+	public signal void download_started(Download item);
+  }
+
+  public class HitTestResult : Object {
+	public HitTestResultContext context {get; construct set;}
+  }
+
+  public class HitTestResultContext : Object {
+	public bool is_link {get; construct set;}
+	public string? link_uri {get; construct set;}
   }
 }

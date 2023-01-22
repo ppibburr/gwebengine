@@ -11,150 +11,201 @@ end
 
 require 'gtk3'
 
-begin
+class BrowserWindow < Gtk::Window
+  type_register
 
-w       = Gtk::Window.new
-w.title = "gtk webengine"
+  attr_reader :webview, :location
+  def initialize uri="https://duckduckgo.com", main: false
+    super()
 
-q = Gtk::Box.new(:vertical)
-q.pack_start e      = Gtk::Entry.new() ,expand: false,fill: true,padding: 0
-q.pack_start engine = GWebEngine::WebView.new, expand: true, fill: true, padding: 0
+    v = Gtk::Box.new :vertical
 
-engine.signal_connect "create" do
-  eng = GWebEngine::WebView.new()
-  w4 = Gtk::Window.new
-  w4.add eng
-  w4.show_all
-  eng
-end
+    @location               = Gtk::Entry.new
+    location.can_focus      = true
+    location.focus_on_click = true
 
+    location.hide if ARGV.index "--no-location-bar"
 
-engine.signal_connect "download-requested" do |_, item|
-  item.signal_connect "decide-destination" do |_, filename|
-    dlg = Gtk::FileChooserDialog.new(:title  => "Save As", :action => :save,
-                                    :buttons => [[Gtk::Stock::SAVE, :accept], [Gtk::Stock::CANCEL, :cancel]])
+    v.pack_start location, expand: false, fill: true, padding: 0
 
-    dlg.current_name = filename
-
-    if dlg.run == Gtk::ResponseType::ACCEPT
-      item.destination = dlg.filename
-    else
-      item.cancel
+    location.signal_connect "activate" do
+      webview.load_uri location.text
     end
 
-    dlg.destroy
+    @webview               = WebView.new
+
+    overlay = Gtk::Overlay.new
+
+    overlay.add webview
+    overlay.add_overlay view_message=Gtk::Label.new
+    view_message.halign = Gtk::Align::START
+    view_message.valign = Gtk::Align::END
+
+    v.pack_start overlay, expand: true, fill: true, padding: 0
+
+    webview.show
+
+    resize 1300,900
+    add v
+    show_all
+
+    signal_connect "delete-event" do
+      Gtk.main_quit()
+    end if main
+
+
+    webview.signal_connect "notify::title" do
+      self.title = webview.title
+    end
+
+    webview.signal_connect "enter-fullscreen" do
+      hide
+      false
+    end
+
+    webview.signal_connect "leave-fullscreen" do
+      show
+      false
+    end
+
+    webview.signal_connect "ready-to-show" do
+      webview.load_uri(uri) if uri
+      present
+
+      result = webview.run_javascript "a={foo: 5};a"
+
+      result.signal_connect "ready" do |r, json|
+        puts json
+      end
+    end
+
+    webview.signal_connect("notify::url") do
+      location.text = webview.url
+    end
+
+    webview.signal_connect("notify::favicon") do
+      self.icon = webview.icon
+    end
+
+    webview.signal_connect "mouse-target-changed" do |wv,ht|
+      if ht.context.link?
+        if (uri = ht.context.link_uri) != ""
+          GLib::Source.remove @source if @source
+          view_message.text=uri
+          view_message.show
+          @source = GLib::Timeout.add 1000 do
+            @source = nil
+            view_message.hide
+            false
+          end
+        else
+          view_message.hide
+        end
+      end
+    end
+
+    webview.signal_connect("on-key-press") do |eng, event|
+      ctrl_shift = (0 != (event.modifiers & Gdk::ModifierType::SHIFT_MASK.to_i)) rescue nil
+      ctrl       = (0 != (event.modifiers & Gdk::ModifierType::CONTROL_MASK.to_i)) rescue nil
+
+      if (!ctrl_shift) && (ctrl)
+        if (event.virtual_key == Gdk::Keyval::KEY_l)
+          location.grab_focus
+
+          next true
+        end
+      end
+    end
   end
 end
 
-e.signal_connect "activate" do
-  engine.load_uri e.text
-end
+class WebView < GWebEngine::WebView
+  type_register
 
-e.can_focus = true
+  def initialize
+    super
 
-w.resize 1300,900
-w.add q
-w.show_all
+    self.focus_on_click = true
+    self.can_focus      = true
 
-e.hide if ARGV.index "--no-location-bar"
+    self.grab_focus
 
-w.signal_connect "delete-event" do
-  Gtk.main_quit()
-end
+    settings.javascript_can_open_windows_automatically = false
 
-engine.settings.enable_fullscreen = true
-engine.settings.enable_javascript = true
-engine.settings.enable_webgl      = true
-engine.settings.enable_plugins    = true
-
-engine.signal_connect "notify::title" do
-  w.title = engine.title
-end
-
-engine.signal_connect "enter-fullscreen" do
-  w.hide
-  false
-end
-
-engine.signal_connect "leave-fullscreen" do
-  w.show
-  false
-end
-
-engine.signal_connect("on-key-press") do |eng, event|
-  ctrl_shift = (0 != (event.modifiers & Gdk::ModifierType::SHIFT_MASK.to_i)) rescue nil
-  ctrl       = (0 != (event.modifiers & Gdk::ModifierType::CONTROL_MASK.to_i)) rescue nil
-
-  if (!ctrl_shift) && (ctrl)
-    if (event.virtual_key == Gdk::Keyval::KEY_l)
-      e.grab_focus
-
-      next true
+    signal_connect "create" do
+      make_window(main: false).webview
     end
 
-    if (event.virtual_key == Gdk::Keyval::KEY_f)
-      if !@find
-        @find = Gtk::Window.new
-        @find.title = "find..."
-        @find.add q=Gtk::Entry.new
+    signal_connect("on-key-press") do |eng, event|
+      ctrl_shift = (0 != (event.modifiers & Gdk::ModifierType::SHIFT_MASK.to_i)) rescue nil
+      ctrl       = (0 != (event.modifiers & Gdk::ModifierType::CONTROL_MASK.to_i)) rescue nil
 
-        q.signal_connect "activate" do
-          engine.find(q.text);
+      if (!ctrl_shift) && (ctrl)
+        if (event.virtual_key == Gdk::Keyval::KEY_f)
+          if !@find_dlg
+            @find_dlg = Gtk::Window.new
+            @find_dlg.title = "find..."
+            @find_dlg.add q=Gtk::Entry.new
+
+            q.signal_connect "activate" do
+              find(q.text);
+            end
+
+            @find_dlg.signal_connect "delete-event" do
+              @find_dlg = nil
+            end
+          end
+
+          @find_dlg.children[0].text=''
+          @find_dlg.show_all
+          @find_dlg.present
+
+          next true
         end
 
-        @find.signal_connect "delete-event" do
-          @find = nil
+        if event.virtual_key == Gdk::Keyval::KEY_Tab
+          go_forward
+          next true
+        end
+
+      elsif ctrl
+        if event.virtual_key == Gdk::Keyval::KEY_ISO_Left_Tab.to_i
+          go_back
+          next true
         end
       end
 
-      @find.children[0].text=''
-      @find.show_all
-      @find.present
-
-      next true
+      false
     end
+  end
+end
 
-    if event.virtual_key == Gdk::Keyval::KEY_Tab
-      engine.go_forward
-      next true
-    end
+def make_window(uri=nil, main: true)
+  BrowserWindow.new(uri, main: main)
+end
 
-  elsif ctrl
-    if event.virtual_key == Gdk::Keyval::KEY_ISO_Left_Tab.to_i
-      engine.go_back
-      next true
+begin
+  GWebEngine::Context.default_context().signal_connect "download-started" do |_, item|
+    item.signal_connect "decide-destination" do |_, filename|
+      dlg = Gtk::FileChooserDialog.new(:title  => "Save As", :action => :save,
+                                      :buttons => [[Gtk::Stock::SAVE, :accept], [Gtk::Stock::CANCEL, :cancel]])
+
+      dlg.current_name = filename
+
+      if dlg.run == Gtk::ResponseType::ACCEPT
+        item.destination = dlg.filename
+      else
+        item.cancel
+      end
+
+      dlg.destroy
     end
   end
 
-  false
-end
+  make_window(ARGV[0]||"https://duckduckgo.com")
 
-engine.signal_connect "ready-to-show" do
-  engine.load_uri(ARGV[0]||"https://duckduckgo.com")
-
-  result = engine.run_javascript "a={foo: 5};a"
-
-  result.signal_connect "ready" do |r, json|
-    puts json
-  end
-end
-
-engine.signal_connect("notify::url") do
-  e.text = engine.url
-end
-
-engine.signal_connect("notify::favicon") do
-  w.icon = engine.icon
-end
-
-puts "reerb"
-engine.focus_on_click=true
-engine.can_focus = true
-engine.grab_focus
-e.focus_on_click=true
-Gtk.main
+  Gtk.main
 
 rescue => e
   p e
 end
-

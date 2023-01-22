@@ -10,7 +10,7 @@ from PyQt5 import QtCore, QtWidgets
 from PyQt5.QtCore import QUrl, QTimer
 from PyQt5.QtGui import QIcon, QShowEvent
 from PyQt5.QtWidgets import (QApplication, QLineEdit, QMainWindow, QPushButton, QToolBar)
-from PyQt5.QtWebEngineWidgets import QWebEnginePage, QWebEngineView, QWebEngineSettings
+from PyQt5.QtWebEngineWidgets import QWebEnginePage, QWebEngineView, QWebEngineSettings, QWebEngineProfile
 from gi.repository import GIRepository
 from gi.repository import GLib
 
@@ -46,6 +46,9 @@ class WebView(QWebEngineView):
         self.par=par
         self.webview = webview
 
+        pg = QWebEnginePage(GWebEngine.Context.get_default_context().profile, self)
+        self.setPage(pg)
+
         self.page().loadStarted.connect(self.loadStarted)
         self.page().loadFinished.connect(self.loadFinished)
         self.page().titleChanged.connect(self.titleChanged)
@@ -54,26 +57,21 @@ class WebView(QWebEngineView):
         self.page().printRequested.connect(lambda :self.webview.print())
         self.page().windowCloseRequested.connect(lambda :self.webview.close())
         self.page().iconUrlChanged.connect(lambda :self.webview.set_favicon(self.page().iconUrl().url()))
-        self.page().profile().downloadRequested.connect(self.downloadFunction)
+        #self.page().profile().downloadRequested.connect(self.page().profile().downloadFunction)
         #self.page().createWindow.connect(lambda :self.webview.create())
 
-        self.settings().setAttribute(QWebEngineSettings.JavascriptEnabled, True)
-        self.settings().setAttribute(QWebEngineSettings.WebGLEnabled, True)
-        self.settings().setAttribute(QWebEngineSettings.FullScreenSupportEnabled, True)
-        self.settings().setAttribute(QWebEngineSettings.PluginsEnabled, True)
-
-        webview.get_settings().set_enable_javascript(True)
-        webview.get_settings().set_enable_fullscreen(True)
-        webview.get_settings().set_enable_webgl(True)
-        webview.get_settings().set_enable_plugins(True)
+        self.settings().setAttribute(QWebEngineSettings.FullScreenSupportEnabled, webview.get_settings().get_enable_fullscreen())
+        self.settings().setAttribute(QWebEngineSettings.FullScreenSupportEnabled, webview.get_settings().get_enable_webgl())
+        self.settings().setAttribute(QWebEngineSettings.FullScreenSupportEnabled, webview.get_settings().get_enable_javascript())
+        self.settings().setAttribute(QWebEngineSettings.PluginsEnabled, webview.get_settings().get_enable_plugins())
+        self.settings().setAttribute(QWebEngineSettings.JavascriptCanOpenWindows,webview.get_settings().get_javascript_can_open_windows_automatically())
 
         ## connect settings properties after init
-        # ...
-
         webview.get_settings().connect("notify::enable-fullscreen", lambda wv,prop: self.settings().setAttribute(QWebEngineSettings.FullScreenSupportEnabled, webview.get_settings().get_enable_fullscreen()))
         webview.get_settings().connect("notify::enable-webgl",      lambda wv,prop: self.settings().setAttribute(QWebEngineSettings.FullScreenSupportEnabled, webview.get_settings().get_enable_webgl()))
         webview.get_settings().connect("notify::enable-javascript", lambda wv,prop: self.settings().setAttribute(QWebEngineSettings.FullScreenSupportEnabled, webview.get_settings().get_enable_javascript()))
         webview.get_settings().connect("notify::enable-plugins",    lambda wv,prop: self.settings().setAttribute(QWebEngineSettings.PluginsEnabled, webview.get_settings().get_enable_plugins()))
+        webview.get_settings().connect("notify::javascript-can-open-windows-automatically",    lambda wv,prop: self.settings().setAttribute(QWebEngineSettings.JavascriptCanOpenWindows,webview.get_settings().get_javascript_can_open_windows_automatically()))
 
         # listen to methods called on the GWebEngine::WebView
         webview.connect("signal-go-back",    lambda wv: self.back())
@@ -87,22 +85,20 @@ class WebView(QWebEngineView):
         webview.connect("signal-get-zoom-level", lambda wv: self.page().zoomFactor())
         webview.connect("signal-set-zoom-level", lambda wv, l: self.page().setZoomFactor(l))
 
-    def downloadFunction(self,item):
-        req= GWebEngine.Download()
-        req.set_destination(item.downloadDirectory()+"/"+item.downloadFileName())
-        self.webview.emit("download-requested",req)
-        req.emit("decide-destination", item.suggestedFileName())
+        self.page().linkHovered.connect(self.onLinkHovered)
 
-        if not req.get_is_cancelled():
-            item.setDownloadFileName(os.path.basename(req.get_destination()))
-            item.setDownloadDirectory(os.path.dirname(req.get_destination()))
-            item.accept()
+    def onLinkHovered(self,link):
+        if self.took:
+
+            ctx = GWebEngine.HitTestResultContext(link_uri = link, is_link=True)
+            result = GWebEngine.HitTestResult(context = ctx)
+            GLib.idle_add(lambda :self.webview.emit("mouse-target-changed", result))
 
     def createWindow(self, t):
         new_web_view = self.webview.emit("create")
+
         if new_web_view != None:
-            window = Window(new_web_view)
-            return window.webEngineView
+            return new_web_view.win.webEngineView
         else:
             return None
 
@@ -142,6 +138,25 @@ class WebView(QWebEngineView):
                 request.accept();
                 self.par.unfullscreen()
 
+class Profile(QWebEngineProfile):
+    def __init__(self,context):
+        super(Profile,self).__init__("gwebengine-profile")
+        self.context = context
+        context.profile = self
+        #self.context.connect("notify::")
+        self.downloadRequested.connect(self.downloadFunction)
+
+    def downloadFunction(self,item):
+        req= GWebEngine.Download()
+        req.set_destination(item.downloadDirectory()+"/"+item.downloadFileName())
+        self.context.emit("download-started",req)
+        req.emit("decide-destination", item.suggestedFileName())
+
+        if not req.get_is_cancelled():
+            item.setDownloadFileName(os.path.basename(req.get_destination()))
+            item.setDownloadDirectory(os.path.dirname(req.get_destination()))
+            item.accept()
+
 class Window(QMainWindow):
     def __init__(self,webview):
         super(Window, self).__init__()
@@ -149,8 +164,11 @@ class Window(QMainWindow):
         self.initUI()
 
     def on_focus(self, old,now):
+        print(old)
+        print(now)
         if now:
     #        ...
+            print("take focus\n")
             self.webview.grab_focus()
     #    else:
     #        if self.ever_shown:
@@ -166,15 +184,18 @@ class Window(QMainWindow):
 
         #self.ever_shown = False
         self.took       = False
-        self.show()
+
         self.webEngineView.page().contentsSizeChanged.connect(self.take)
         self.webEngineView.setHtml("<html/>")
+        self.show()
         #self.webview.connect("hierarchy-changed", self.take)
 
     def take(self, wv):
         if  not self.took:
+            print(self)
             print(self.took)
             self.took = True
+            self.webEngineView.took = True
             self.webview.take(self.winId())
             GLib.timeout_add(0,lambda :self.webview.emit("ready-to-show"))
 
@@ -219,6 +240,9 @@ class Window(QMainWindow):
         self.fs=w
         self.fsv=v
 
+def make_context(relay,context):
+    Profile(context)
+
 def start_qt_app(relay):
     relay.app = QApplication(sys.argv)
     QTimer.singleShot(0,lambda :relay.emit("qt-app"))
@@ -239,7 +263,7 @@ def main():
 
     relay  = GWebEngine.Main.get_default()
     relay.connect("signal-make-webview", create_gwebengine)
-
+    relay.connect("signal-make-context", make_context)
     w.connect("draw",lambda win,e:pango_init(w,relay))
 
     plugin = GWebEngine.load_plugin(sys.argv[2],sys.argv[3],[])
